@@ -1,4 +1,4 @@
-MSK Encoder Readme
+# MSK Encoder Readme
 
 Current version v1.6
 - Will decode a 48 kHz sampled audio signal with carrier frequency of 10 kHz.
@@ -115,9 +115,8 @@ Outputs 		- line count
 Generated files 	- none
 
  
-
-
-Frequency Recovery Loop Readme
+ 
+# Frequency Recovery Loop Readme
 
 Current version vC.4.3
 - does not work
