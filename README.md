@@ -1,7 +1,5 @@
-#### README.md
-
-## msk_encode_v2_1_2
-Reads in .txt file nd outputs .wav file with MSK encoded message
+# msk_encode_v2_1_2
+## Reads in .txt file nd outputs .wav file with MSK encoded message
 
 carrier_A 		use 1
 
@@ -21,8 +19,8 @@ output_file_name	.wav file name for output MSK signal
 2. Run the function, it will generate a .wav file.
 
 
-## msk_demodulate_v1
-Reads in the .wav file and ouputs demodulated bits
+# msk_demodulate_v1
+## Reads in the .wav file and ouputs demodulated bits
 
 input_file 		this is the output from msk_encode_v2_1_2
 
