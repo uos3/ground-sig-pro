@@ -11,6 +11,49 @@ import soundfile as sf
 # Modulator function
 # =============================================================================
 def msk_encode(carrier_A, carrier_f, bit_rate, sample_rate, message, output_file_name):
+    """
+    Reads in message from input .txt file and outputs MSK modualted message in the form of a .wav file.
+    
+    Inputs
+        carrier_A           -   amplitude (just set to 1)
+        carrier_f           -   carrier frequency
+        bit_rate            -   bit rate
+        sample_rate         -   sample rate (use 48000)
+        message             -   .txt file containing message to modulate (e.g. message.txt)
+        output_file_name    -   .wav output file name (e.g. output.wav)
+    
+    Output
+        Does not return anything
+        Creates .wav file with MSK modulated signal
+    
+    Variables
+        message_file        -   message file file object
+        m_phases            -   number of bits per symbol
+        message             -   list containing message bits
+        samples_per_symbol  -   samples per symbol (2*samples per bit)
+        sample_interval     -   time period of one sample
+        bit_period          -   time period of one bit
+        I_bits              -   list containing even bits in message
+        Q_bits              -   list containing odd bits in message
+        t                   -   instantaneous time on modulator clock
+        I_arm               -   list containing I_bits after first modulation
+        Q_arm               -   list containing Q_bits after first modulation
+        sum_channel         -   list containing sum of I and Q channels
+        tQ                  -   clock adjustment for Q arm
+        Qi                  -   bit index adjustment for Q arm
+    
+    Function called
+        len()
+        int()
+        range()
+        open()
+        max()
+        file.read()
+        list.append()
+        math.sin()
+        math.cos()
+        soundfile.write()
+    """
     message_file = open(message, "r")
 
     m_phases = 2
