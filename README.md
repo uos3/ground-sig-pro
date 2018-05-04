@@ -1,4 +1,4 @@
-README.md
+#### README.md
 
 ## msk_encode_v2_1_2
 Reads in .txt file nd outputs .wav file with MSK encoded message
@@ -11,7 +11,7 @@ bit_rate 		will be 6000
 
 sample_rate		needs to be 48000
 
-message 		.txt file name with message to encode: must be in the directory 
+message 		.txt file name with message to encode: must be in the directory
 
 output_file_name	.wav file name for output MSK signal
 
