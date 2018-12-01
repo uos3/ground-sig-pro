@@ -31,7 +31,7 @@ def run_demodulator(input_file, bit_rate=BIT_RATE):
             creates .BIN file containint demodulated bits
     
     Variables
-            signal_in       -   array containing MSK signal sample amplitudes
+            signal_in       -   array contaiOing MSK signal sample amplitudes
             sample_rate     -   sample rate
             fc              -   carrier frequency
             bit_rate        -   bit rate of incoming signal
