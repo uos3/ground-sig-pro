@@ -24,6 +24,109 @@ def get_f1_f2(k_index):
     return (f1_list[k_index], f2_list[k_index])
     
 
+class bcjr_decoder(object):
+    state_cnt = 8
+    trans_cnt = 8
+    
+    trans_lut = [
+    [1-1,        1-1,        0,          0],
+    [2-1,        5-1,        0,          0],
+    [3-1,        6-1,        0,          1],
+    [4-1,        2-1,        0,          1],
+    [5-1,        3-1,        0,          1],
+    [6-1,        7-1,        0,          1],
+    [7-1,        8-1,        0,          0],
+    [8-1,        4-1,        0,          0],
+    [1-1,        5-1,        1,          1],
+    [2-1,        1-1,        1,          1],
+    [3-1,        2-1,        1,          0],
+    [4-1,        6-1,        1,          0],
+    [5-1,        7-1,        1,          0],
+    [6-1,        3-1,        1,          0],
+    [7-1,        4-1,        1,          1],
+    [8-1,        8-1,        1,          1]]
+    
+    def __init__(self, chan_uncoded_llrs, chan_coded_llrs, uncoded_llrs_term, coded_llrs_term):
+        
+        self.chan_uncoded_llrs = chan_uncoded_llrs
+        self.coded_llrs = chan_coded_llrs
+        
+        self.K = len(self.chan_uncoded_llrs)
+        
+        # TODO: termination properly
+        self.betas_init = [0]*state_cnt
+    
+    def activate(self, interleaved_llrs):
+        
+        gammas = [[0]*self.trans_cnt]*self.K
+        alphas = [[0]*self.state_cnt]*self.K
+        betas = [[0]*self.state_cnt]*self.K
+        tmp1 = [0]*self.state_cnt
+        
+        # Add the uncoded LLRs
+        uncoded = self.chan_uncoded_llrs.copy()
+        for k in range(0,K):
+            uncoded[k] += interleaved_llrs[k]
+        
+        # Calculate the gammas
+        for k in range(0,K):
+            for t in range(0, trans_cnt):
+                if (self.trans_lut[t][2] and self.trans_lut[t][3]):
+                    gammas[k][t] = uncoded[k] + self.chan_coded_llrs[k]
+                elif self.trans_lut[t][2]:
+                    gammas[k][t] = uncoded[k]
+                elif self.trans_lut[t][3]:
+                    gammas[k][t] = self.chan_coded_llrs[k] 
+                #else:
+                #    gammas[k][t] = 0
+                    
+        # Do the forwards recursion
+        # set the initial value
+        alphas[0] = [0, [-9999999]*(self.state_cnt-1)]
+        for k in range(1, K):
+            for s in range(0, self.state_cnt):
+                tmp1[self.trans_lut[s][1]] = alphas[k-1][self.trans_lut[s][0]] + gammas[k-1][s];
+            for s in range(self.state_cnt, self.trans_cnt):
+                tmp2 = alphas[k-1][self.trans_lut[s][0]] + gammas[k-1][s];
+                alphas[k][self.trans_lut[s][1]] = maxstar(tmp1[self.trans_lut[s][1]],tmp2)
+                
+        # Do the backwards recursion
+        betas[K-1] = self.betas_init
+        for k in range(K-2,-1,-1):
+            for s in range(0, self.state_cnt):
+                tmp1[self.trans_lut[s][0]] = betas[k+1][self.trans_lut[s][1]] + gammas[k+1][s];
+            for s in range(self.state_cnt, self.trans_cnt):
+                tmp2 = betas[k+1][self.trans_lut[s][1]] + gammas[k+1][s];
+                betas[k][self.trans_lut[s][0]] = maxstar(tmp1[self.trans_lut[s][0]], tmp2)
+        
+        # Calculate the deltas
+        deltas = gammas.copy()
+        for t in range(0, self.trans_cnt):
+            t1 = self.trans_lut[s][0]
+            t2 = self.trans_lut[s][1]
+            for k in range(0,K):
+                deltas[k][t] = alphas[k][t1] + betas[k][t2]
+         
+        # Extrinsic LLR out
+        extrinsic_out = [0]*K
+        for k in range(0, K):
+            p1 = None
+            p0 = None
+            for t in range(0, self.trans_cnt):
+                if self.trans_lut[s][2]:
+                    if not p1 is None:
+                        p1 = maxstar(p1,deltas[k][t])
+                    else:
+                        p1 = deltas[k][t]
+                 else:
+                    if not p0 is None:
+                        p0 = maxstar(p0,deltas[k][t])
+                    else:
+                        p0 = deltas[k][t]
+            extrinsic_out[k] = p1-p0-uncoded[k]
+        
+        return extrinsic_out
+        
 def interleave(a):
     # from 5.1.3.2.3
     
@@ -192,7 +295,42 @@ def codeblock_encoder_chain(a_bits):
     e = remove_nulls(w)
             
     return e
+    
+def decoder_core(d_0, d_1, d_2):
+    ## TODO: need to input max iterations; needs CRC early stopping
+    K = len(d_0)-4
+    
+    iterations = 10
+    
+    sys = d_0[0:K]
+    parity_upper = d_1[0:K]
+    parity_lower = d_2[0:K]
+    sys_interleaved = interleave(sys)
+    
+    interleave_pattern = interleave(range(0,K))
+    
+    ##TODO: termination
+    
+    Upper = bcjr_decoder(sys, parity_upper, 0, 0)
+    Lower = bcjr_decoder(sys_interleaved, parity_lower, 0, 0)
+    
+    upper_ap = [0]*K
 
+    for i in range(0,iterations):
+        upper_ex = Upper.activate(upper_ap)
+        for k in range(0,K):
+            lower_ap[interleave_pattern[k]] = upper_ex[k]
+        lower_ex = Lower.activate(lower_ap)
+        for k in range(0,K):
+            upper_ap[k] = lower_ex[interleave_pattern[k]]
+            
+    # Now we're done, output the final LLR output
+    llrs_out = [0]*K
+    for k in range(0,K):
+        llrs_out[k] = upper_ap[k] + upper_ex[k] + sys[k]
+    return llrs_out
+    
+    
 def codeblock_decoder_chain(e_llrs, A)
     K = pick_k(A)
     F = K-A
@@ -224,7 +362,7 @@ def codeblock_decoder_chain(e_llrs, A)
         else:
             d_2[index-20000] = e_llrs[i]
             
-    (c_hat, crc_pass) = decoder_core(d_0, d_1, d_2)
+    c_hat, = decoder_core(d_0, d_1, d_2)
     
     a_hat = c_hat[F:K-1]
     return a_hat
