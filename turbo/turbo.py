@@ -1,10 +1,13 @@
+import math
+
 
 def get_allowed_k_values():
     out = []
-    out += range(40,8,512+1)
-    out += range(512,16,1024+1)
-    out += range(1024,32,2048+1)
-    out += range(2048,64,6144+1)
+    out += list(range(40,512+1,8))
+    out += list(range(512,1024+1,16))
+    out += list(range(1024,2048+1,32))
+    out += list(range(2048,6144+1,64))
+    return out
 
 def get_k_index(k):
     allowed = get_allowed_k_values()
@@ -26,7 +29,7 @@ def get_f1_f2(k_index):
 
 class bcjr_decoder(object):
     state_cnt = 8
-    trans_cnt = 8
+    trans_cnt = 16
     
     trans_lut = [
     [1-1,        1-1,        0,          0],
@@ -46,22 +49,29 @@ class bcjr_decoder(object):
     [7-1,        4-1,        1,          1],
     [8-1,        8-1,        1,          1]]
     
+    def maxstar(a, b):
+        #return max(a,b) + math.log(1.0+math.exp(-abs(a-b)))
+        return max(a,b)
+
+    
     def __init__(self, chan_uncoded_llrs, chan_coded_llrs, uncoded_llrs_term, coded_llrs_term):
         
         self.chan_uncoded_llrs = chan_uncoded_llrs
-        self.coded_llrs = chan_coded_llrs
+        self.chan_coded_llrs = chan_coded_llrs
         
         self.K = len(self.chan_uncoded_llrs)
         
         # TODO: termination properly
-        self.betas_init = [0]*state_cnt
+        self.betas_init = [0]*self.state_cnt
     
     def activate(self, interleaved_llrs):
-        
-        gammas = [[0]*self.trans_cnt]*self.K
-        alphas = [[0]*self.state_cnt]*self.K
-        betas = [[0]*self.state_cnt]*self.K
-        tmp1 = [0]*self.state_cnt
+        K = self.K
+        state_cnt = self.state_cnt
+        trans_cnt = self.trans_cnt
+        gammas = [[0] * trans_cnt for i in range(K)]
+        alphas = [[0] * state_cnt for i in range(K)]
+        betas = [[0] * state_cnt for i in range(K)]
+        tmp1 = [0]*state_cnt
         
         # Add the uncoded LLRs
         uncoded = self.chan_uncoded_llrs.copy()
@@ -79,79 +89,79 @@ class bcjr_decoder(object):
                     gammas[k][t] = self.chan_coded_llrs[k] 
                 #else:
                 #    gammas[k][t] = 0
-                    
+
+        
         # Do the forwards recursion
         # set the initial value
-        alphas[0] = [0, [-9999999]*(self.state_cnt-1)]
+        alphas[0] = [0] + [-9999999]*(state_cnt-1)
         for k in range(1, K):
-            for s in range(0, self.state_cnt):
-                tmp1[self.trans_lut[s][1]] = alphas[k-1][self.trans_lut[s][0]] + gammas[k-1][s];
-            for s in range(self.state_cnt, self.trans_cnt):
-                tmp2 = alphas[k-1][self.trans_lut[s][0]] + gammas[k-1][s];
-                alphas[k][self.trans_lut[s][1]] = maxstar(tmp1[self.trans_lut[s][1]],tmp2)
-                
+            for t in range(0, state_cnt):
+                tmp1[self.trans_lut[t][1]] = alphas[k-1][self.trans_lut[t][0]] + gammas[k-1][t]
+            for t in range(state_cnt, trans_cnt):
+                tmp2 = alphas[k-1][self.trans_lut[t][0]] + gammas[k-1][t]
+                alphas[k][self.trans_lut[t][1]] = bcjr_decoder.maxstar(tmp1[self.trans_lut[t][1]],tmp2)
+
         # Do the backwards recursion
         betas[K-1] = self.betas_init
         for k in range(K-2,-1,-1):
-            for s in range(0, self.state_cnt):
-                tmp1[self.trans_lut[s][0]] = betas[k+1][self.trans_lut[s][1]] + gammas[k+1][s];
-            for s in range(self.state_cnt, self.trans_cnt):
-                tmp2 = betas[k+1][self.trans_lut[s][1]] + gammas[k+1][s];
-                betas[k][self.trans_lut[s][0]] = maxstar(tmp1[self.trans_lut[s][0]], tmp2)
-        
+            for t in range(0, state_cnt):
+                tmp1[self.trans_lut[t][0]] = betas[k+1][self.trans_lut[t][1]] + gammas[k+1][t]
+            for t in range(state_cnt, trans_cnt):
+                tmp2 = betas[k+1][self.trans_lut[t][1]] + gammas[k+1][t]
+                betas[k][self.trans_lut[t][0]] = bcjr_decoder.maxstar(tmp1[self.trans_lut[t][0]], tmp2)
+
         # Calculate the deltas
         deltas = gammas.copy()
-        for t in range(0, self.trans_cnt):
-            t1 = self.trans_lut[s][0]
-            t2 = self.trans_lut[s][1]
+        for t in range(0, trans_cnt):
+            t1 = self.trans_lut[t][0]
+            t2 = self.trans_lut[t][1]
             for k in range(0,K):
                 deltas[k][t] = alphas[k][t1] + betas[k][t2]
-         
+        
         # Extrinsic LLR out
         extrinsic_out = [0]*K
         for k in range(0, K):
             p1 = None
             p0 = None
-            for t in range(0, self.trans_cnt):
-                if self.trans_lut[s][2]:
+            for t in range(0, trans_cnt):
+                if self.trans_lut[t][2]:
                     if not p1 is None:
-                        p1 = maxstar(p1,deltas[k][t])
+                        p1 = bcjr_decoder.maxstar(p1,deltas[k][t])
                     else:
                         p1 = deltas[k][t]
-                 else:
+                else:
                     if not p0 is None:
-                        p0 = maxstar(p0,deltas[k][t])
+                        p0 = bcjr_decoder.maxstar(p0,deltas[k][t])
                     else:
                         p0 = deltas[k][t]
             extrinsic_out[k] = p1-p0-uncoded[k]
-        
+
         return extrinsic_out
         
 def interleave(a):
     # from 5.1.3.2.3
-    
-    k_index = get_k_index(k)
+
     # pre-allocate the output
-    k = len(a)
-    b = [0]*k
+    K = len(a)
+    k_index = get_k_index(K)
+    b = [0]*K
     
     # initialise the QPP interleaver address generator
     (f1,f2) = get_f1_f2(k_index)
     
     g = f1+f2
     f = 0
-    k = 0
-    
-    for i in range(0, k):
+
+    for i in range(0, K):
         b[f] = a[i]
         
         # increment the interleaver address generator
         f = f + g
         g = g + f2
-        if g >= k:
-            g = g - k
-        if f >= k:
-            f = f - k
+        if g >= K:
+            g = g - K
+        if f >= K:
+            f = f - K
     
     return b
 
@@ -163,9 +173,9 @@ def component_encoder(c):
         state_nxt = state << 1
         if c[i]:
             state_nxt |= ((state >> 1) & 1) ^ ((state >> 2) & 1) ^ 1;
-         else:
+        else:
             state_nxt |= ((state >> 1) & 1) ^ ((state >> 2) & 1);
-        if ((state_nxt & 1) ^ (state & 1) ^ ((state >> 2) & 1))
+        if ((state_nxt & 1) ^ (state & 1) ^ ((state >> 2) & 1)):
             z[i] = 1
         state = state_nxt
     
@@ -200,9 +210,9 @@ def component_encoder(c):
 def subblock_interleave(d, d_select):
     D = len(d)
     C = 32
-    R = math.ceil(D,C)
+    R = math.ceil(D/C)
     N_D = R*C-D  # number of prepended nulls
-    y = [[-1]*N_D,  d]
+    y = [-1]*N_D +  d
     P =  [0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31]
 
     v = [0]*(R*C)
@@ -222,11 +232,12 @@ def subblock_interleave(d, d_select):
         for k in range(0, R*C):
             pi_k = ( P[math.floor(k/R)] + C*(k%R) + 1 )%K
             v[k] = y[pi_k]
+    return v
 
 def pick_k(A):
     K_list = get_allowed_k_values()
     K = -1
-    for k in range(0, K_list):
+    for k in range(0, len(K_list)):
         if A <= K_list[k]:
             K = K_list[k]
             break
@@ -235,25 +246,25 @@ def pick_k(A):
         return None
     return K
 
-def bit_collection(v_0, v_1, v_2)
+def bit_collection(v_0, v_1, v_2):
     # 5.1.4.1.2 bit collection
     w = v_0
     for i in range(0, len(v_1)):
-        w += [v_1, v_2]
+        w += [v_1[i], v_2[i]]
     return w
 
-def remove_nulls(a)
+def remove_nulls(a):
     b = []
     for i in range(0, len(a)):
         if not a[i] is None:
-            b += a[i]
+            b += [a[i]]
     return b
     
-def encoder_core(c_bits, F):
+def encoder_core(c, F):
 
-    k = len(c_bits)
+    k = len(c)
     
-    c_interleaved = interleave(c_bits)
+    c_interleaved = interleave(c)
     
     (z, x_term, z_term) = component_encoder(c)
     (z_prime, x_prime_term, z_prime_term) = component_encoder(c_interleaved)
@@ -264,8 +275,8 @@ def encoder_core(c_bits, F):
     d_2 = z_prime
     
     for f in range(0, F):
-        d_0(f) = None
-        d_1(f) = None
+        d_0[f] = None
+        d_1[f] = None
         
     # as in 5.1.3.2.2
     d_0 += [x_term[0], z_term[1], x_prime_term[0], z_prime_term[1]]
@@ -279,7 +290,7 @@ def codeblock_encoder_chain(a_bits):
     A = len(a_bits)
     K = pick_k(A)
     F = K-A
-    c = [ [0]*F, a_bits]
+    c = [0]*F + a_bits
     
     (d_0, d_1, d_2) = encoder_core(c, F)
     
@@ -307,7 +318,7 @@ def decoder_core(d_0, d_1, d_2):
     parity_lower = d_2[0:K]
     sys_interleaved = interleave(sys)
     
-    interleave_pattern = interleave(range(0,K))
+    interleave_pattern = interleave(list(range(0,K)))
     
     ##TODO: termination
     
@@ -315,14 +326,15 @@ def decoder_core(d_0, d_1, d_2):
     Lower = bcjr_decoder(sys_interleaved, parity_lower, 0, 0)
     
     upper_ap = [0]*K
+    lower_ap = [0]*K
 
     for i in range(0,iterations):
         upper_ex = Upper.activate(upper_ap)
         for k in range(0,K):
-            lower_ap[interleave_pattern[k]] = upper_ex[k]
+            lower_ap[k] = upper_ex[interleave_pattern[k]]
         lower_ex = Lower.activate(lower_ap)
         for k in range(0,K):
-            upper_ap[k] = lower_ex[interleave_pattern[k]]
+            upper_ap[interleave_pattern[k]] = lower_ex[k]
             
     # Now we're done, output the final LLR output
     llrs_out = [0]*K
@@ -331,18 +343,18 @@ def decoder_core(d_0, d_1, d_2):
     return llrs_out
     
     
-def codeblock_decoder_chain(e_llrs, A)
+def codeblock_decoder_chain(e_llrs, A):
     K = pick_k(A)
     F = K-A
     
     # This jumps over bit collection and subblock interleaving
     #  in one step, by using one interleaver pattern
-    indicies_d_0 = range(0,K+4)
-    indicies_d_1 = range(0,K+4)+10000
-    indicies_d_2 = range(0,K+4)+20000
+    indicies_d_0 = list(range(0,K+4))
+    indicies_d_1 = list(range(10000,10000+K+4))
+    indicies_d_2 = list(range(20000,20000+K+4))
     for f in range(0, F):
-        indicies_d_0(f) = None
-        indicies_d_1(f) = None
+        indicies_d_0[f] = None
+        indicies_d_1[f] = None
     indicies_v_0 = subblock_interleave(indicies_d_0, 0)
     indicies_v_1 = subblock_interleave(indicies_d_1, 1)
     indicies_v_2 = subblock_interleave(indicies_d_2, 2)
@@ -353,7 +365,7 @@ def codeblock_decoder_chain(e_llrs, A)
     d_0 = [0]*(K+4)
     d_1 = [0]*(K+4)
     d_2 = [0]*(K+4)
-    for i in range(0 ,len(e_llrs):
+    for i in range(0 ,len(e_llrs)):
         index = indicies_e[i]
         if index < 10000:
             d_0[index] = e_llrs[i] # (change to += if repetition is ever supported)
@@ -362,7 +374,7 @@ def codeblock_decoder_chain(e_llrs, A)
         else:
             d_2[index-20000] = e_llrs[i]
             
-    c_hat, = decoder_core(d_0, d_1, d_2)
+    c_hat = decoder_core(d_0, d_1, d_2)
     
     a_hat = c_hat[F:K-1]
     return a_hat
