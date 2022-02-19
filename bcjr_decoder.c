@@ -24,17 +24,34 @@ static int translte8[16][4] =  {
     {8-1,        8-1,        1,          1}
 };
 
+/**
+ * @brief The statement chooses the biggest variable in memory out of 2 different variables
+ * 
+ */
 #ifndef max
  #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
 #endif
+
 __inline  double maxstar(double a, double b)
 {
     return  max(a,b) + log(1.0+exp(-fabs(a-b)));
 }
 
+/**
+ * @brief BCJR is an algorithm for maximum a posteriori (MAP) decoding of error correcting codes (ECC) defined on trellises (Covolution Code) 
+ * 
+ * @param uncoded_in 
+ * @param coded_in1 
+ * @param uncoded_out 
+ * @param len 
+ * @param trans 
+ * @param state_count 
+ * @param trans_count 
+ * @param last_state 
+ */
 void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
         int len, int trans[][4], int state_count, int trans_count, int last_state)
 {
@@ -87,7 +104,7 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
         betas[i] = (double*) malloc(len*sizeof(double));
 
 
-    /* forward recursion (alphas) */
+    /* forward recursion by computing forward probabilities (alphas) */
     alphas[0][0] = 0;        /* first state */
     for (i = 1; i < states; i++)
         alphas[i][0] = -9000;
@@ -101,7 +118,7 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
 
 
 
-    /* backwards recursion (betas) */
+    /* backwards recursion by computing backwward probabilities(betas) */
     /* double betas[8][len]; */
     if (last_state < 1 || last_state > states){
         for (i = 0; i < states; i++)
@@ -173,7 +190,9 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
     }
 
 
-    /* extrinisic uncoded llr */
+    /* extrinisic uncoded llr 
+    log-likelyhood Ratio (LLR) 
+    */
     for (j = 0; j < len; j++)
     {
         set0 = 0;
@@ -204,15 +223,19 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
     }
 
 
-
+    /* Gammas are erased from memory*/
     for (i = 0; i < transc; i++){
         free(gammas[i]);
     }
     free(gammas);
+
+    /* Alphas are erased from memory*/
     for (i = 0; i < states; i++){
         free(alphas[i]);
     }
     free(alphas);
+
+    /* Betas are erased from memory*/
     for (i = 0; i < states; i++){
         free(betas[i]);
     }

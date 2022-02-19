@@ -3,6 +3,8 @@
 #   frequency shift keying (CP-BFSK) aka Minimum Shift Keying (MSK),
 #   according to the formulas at
 #   https://www.dsprelated.com/showarticle/1016.php
+#
+# TO DO: CREATE DIAGRAM
 
 import math as m
 import numpy as n
