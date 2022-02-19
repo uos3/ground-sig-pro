@@ -1,7 +1,8 @@
 # =============================================================================
 # msk_demodulate_v1
-#
+# Ask Phil Crump about how to test
 # combines frequency finder and demodulator
+# TO DO: CREATE DIAGRAM
 # =============================================================================
 
 import math as m
@@ -52,7 +53,7 @@ def run_demodulator(input_file, bit_rate=BIT_RATE):
 
 def find_carrier(signal_in, sample_rate):
     """
-    Takes in list of MSK signal sample amplitudes annd outputs carrier frequency
+    Takes in list of MSK signal sample amplitudes and outputs carrier frequency
     
     Input
             signal_in       -   array containing MSK signal sample amplitudes
@@ -79,11 +80,14 @@ def find_carrier(signal_in, sample_rate):
     
     # perform fast fourier transform
     sp = np.fft.fft(signal_in)
+
     # generate list of frequencies
     freq = np.fft.fftfreq(n, 1/sample_rate)
+
     # abosulte values of above lists
     sp_abs = abs(sp)
     freq = abs(freq)
+
     #find frequency correlating to maximum signal strength
     fc = freq[np.argmax(sp_abs)]
 

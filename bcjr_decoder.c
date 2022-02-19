@@ -1,3 +1,15 @@
+/**
+ * @file bcjr_decoder.c
+ * @author your name (you@domain.com)
+ * @brief BCJR algorithm is implemented to estimate the original bit sequence sent. 
+ * @version 0.1
+ * @date 2022-02-15
+ * 
+ * Refer to GDP 17-18
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,8 +37,8 @@ static int translte8[16][4] =  {
 };
 
 /**
- * @brief The statement chooses the biggest variable in memory out of 2 different variables
- * 
+ * @brief The statement chooses the biggest number out of 2 different variables. Note __typeof__ 
+ * used if writing a header file that must work when included in ISO C programs.
  */
 #ifndef max
  #define max(a,b) \
@@ -35,13 +47,28 @@ static int translte8[16][4] =  {
      _a > _b ? _a : _b; })
 #endif
 
+
+/**
+ * @brief Variation of complex BCJR algorithm where all multiplications are turned into sums to reduce
+ * computation complexity, where log-MAP algorithm is being used. 
+ */
 __inline  double maxstar(double a, double b)
 {
+    /* fabs() takes a single argument (in double) and returns absolute value of that number */
     return  max(a,b) + log(1.0+exp(-fabs(a-b)));
 }
 
 /**
- * @brief BCJR is an algorithm for maximum a posteriori (MAP) decoding of error correcting codes (ECC) defined on trellises (Covolution Code) 
+ * @brief BCJR is an algorithm for maximum a posteriori (MAP) decoding of error correcting codes (ECC) 
+ * defined on trellises (Covolution Code), where instead of just going forward as Viterbi decoding it 
+ * goes forward and backwards getting a posteriori log likelihood ratio for each message width.
+ * 
+ * While Viterbi decoding used ML (finds the codeword which is closest to distance), while MAP gives 
+ * LLR for each bit given all the received information (soft output) produces probabilities on the bits, 
+ * not just the likely bits.
+ * 
+ * More info:
+ * https://www.semanticscholar.org/paper/From-BCJR-to-turbo-decoding%3A-MAP-algorithms-made-Abrantes/6e7f04a3c3de4957238e2fadfdabdd0d272b362e
  * 
  * @param uncoded_in 
  * @param coded_in1 
@@ -67,7 +94,9 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
     double temp[16];
     int states = state_count;
 
-    /* calculate gammas */
+    /* calculate gammas 
+    gamma is a probability representing present (received symbol is y_k at time k and current state is S_k=s)
+    */
     gammas = (double**) malloc (transc*sizeof(double *));
     for (i = 0; i < transc; i++)
         gammas[i] = (double*) malloc(len*sizeof(double));
@@ -104,7 +133,9 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
         betas[i] = (double*) malloc(len*sizeof(double));
 
 
-    /* forward recursion by computing forward probabilities (alphas) */
+    /* forward recursion by computing forward probabilities (alphas), computed as sequence y is received, calculated
+    * by going forward from the beginning to the end of the trellis
+    */
     alphas[0][0] = 0;        /* first state */
     for (i = 1; i < states; i++)
         alphas[i][0] = -9000;
@@ -118,7 +149,7 @@ void bcjr_decoder(double *uncoded_in, double *coded_in1, double *uncoded_out,
 
 
 
-    /* backwards recursion by computing backwward probabilities(betas) */
+    /* backwards recursion by computing backwward probabilities(betas), only computed after whole sequence y is received  */
     /* double betas[8][len]; */
     if (last_state < 1 || last_state > states){
         for (i = 0; i < states; i++)
